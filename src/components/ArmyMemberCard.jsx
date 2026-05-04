@@ -17,6 +17,7 @@ export default function ArmyMemberCard({ member, onRemoveMember }) {
         {Array.isArray(member.tags) && member.tags.length > 0 ? (
           <p className="tag-row">{formatTags(member.tags)}</p>
         ) : null}
+        {member.loadout ? <p className="member-note-text"><strong>Loadout:</strong> {member.loadout}</p> : null}
         {member.memberNotes ? <p className="member-note-text">{member.memberNotes}</p> : null}
         <p>{member.imageName}</p>
         <button

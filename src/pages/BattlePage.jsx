@@ -23,8 +23,10 @@ export default function BattlePage({
         .filter((member) => member.imageDataUrl)
         .map((member) => ({
           id: member.id,
+          armyId: army.id,
           operative: member.operative,
           imageDataUrl: member.imageDataUrl,
+          memberNotes: member.memberNotes || "",
           armyName: army.armyName,
         }))
     );
@@ -36,6 +38,8 @@ export default function BattlePage({
   );
 
   const activeCard = activeCardIndex >= 0 ? viewableCards[activeCardIndex] : null;
+  const armyCards = activeCard ? viewableCards.filter((card) => card.armyId === activeCard.armyId) : [];
+  const activeArmyCardIndex = activeCard ? armyCards.findIndex((card) => card.id === activeCard.id) : -1;
 
   const closeCardModal = () => {
     setActiveCardId("");
@@ -48,23 +52,23 @@ export default function BattlePage({
   };
 
   const showNextCard = () => {
-    if (!viewableCards.length || activeCardIndex < 0) {
+    if (!activeCard || armyCards.length === 0 || activeArmyCardIndex < 0) {
       return;
     }
 
-    const nextIndex = (activeCardIndex + 1) % viewableCards.length;
-    setActiveCardId(viewableCards[nextIndex].id);
-    setActiveModalImageUrl(viewableCards[nextIndex].imageDataUrl);
+    const nextIndex = (activeArmyCardIndex + 1) % armyCards.length;
+    setActiveCardId(armyCards[nextIndex].id);
+    setActiveModalImageUrl(armyCards[nextIndex].imageDataUrl);
   };
 
   const showPreviousCard = () => {
-    if (!viewableCards.length || activeCardIndex < 0) {
+    if (!activeCard || armyCards.length === 0 || activeArmyCardIndex < 0) {
       return;
     }
 
-    const previousIndex = (activeCardIndex - 1 + viewableCards.length) % viewableCards.length;
-    setActiveCardId(viewableCards[previousIndex].id);
-    setActiveModalImageUrl(viewableCards[previousIndex].imageDataUrl);
+    const previousIndex = (activeArmyCardIndex - 1 + armyCards.length) % armyCards.length;
+    setActiveCardId(armyCards[previousIndex].id);
+    setActiveModalImageUrl(armyCards[previousIndex].imageDataUrl);
   };
 
   if (!battleState) {
@@ -144,18 +148,25 @@ export default function BattlePage({
               </button>
             </div>
 
+            {activeCard.memberNotes ? (
+              <div className="card-modal-notes" aria-label="Operative notes">
+                <p className="roster-meta"><strong>Notes</strong></p>
+                <p>{activeCard.memberNotes}</p>
+              </div>
+            ) : null}
+
             <div className="card-modal-image-wrap">
               <img src={activeModalImageUrl || activeCard.imageDataUrl} alt={`${activeCard.operative} full card`} />
             </div>
 
             <div className="card-modal-footer">
-              <button type="button" className="ghost" onClick={showPreviousCard}>
+              <button type="button" className="ghost" onClick={showPreviousCard} disabled={armyCards.length <= 1}>
                 Previous
               </button>
               <p className="roster-meta">
-                Card {activeCardIndex + 1} / {viewableCards.length}
+                Card {activeArmyCardIndex + 1} / {armyCards.length}
               </p>
-              <button type="button" onClick={showNextCard}>
+              <button type="button" onClick={showNextCard} disabled={armyCards.length <= 1}>
                 Next
               </button>
             </div>

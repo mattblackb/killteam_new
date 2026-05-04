@@ -14,7 +14,9 @@ export function createBattleArmy(army) {
     members: army.members.map((member) => ({
       ...member,
       maxWounds: typeof member.wounds === "number" ? member.wounds : 0,
-      currentWounds: typeof member.wounds === "number" ? member.wounds : 0
+      currentWounds: typeof member.wounds === "number" ? member.wounds : 0,
+      posture: "ready",
+      activation: "not-activated"
     }))
   };
 }
@@ -40,7 +42,27 @@ export function normalizeBattleState(rawBattleState) {
                   ? member.currentWounds
                   : typeof member.wounds === "number"
                     ? member.wounds
-                    : 0
+                    : 0,
+              posture: ["ready", "engaged", "concealed", "guard"].includes(member.posture)
+                ? member.posture
+                : member.state === "engaged" || member.state === "engaged-activated"
+                  ? "engaged"
+                  : member.state === "concealed"
+                    ? "concealed"
+                    : member.state === "guard"
+                      ? "guard"
+                      : member.order === "engage"
+                        ? "engaged"
+                        : member.order === "conceal"
+                          ? "concealed"
+                          : member.status === "guard"
+                            ? "guard"
+                            : "ready",
+              activation: ["activated", "not-activated"].includes(member.activation)
+                ? member.activation
+                : member.state === "engaged-activated" || member.status === "activated"
+                  ? "activated"
+                  : "not-activated"
             }))
           : []
       }))

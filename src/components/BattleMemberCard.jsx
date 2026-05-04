@@ -35,6 +35,7 @@ export default function BattleMemberCard({
         <div className="battle-member-meta">
           <h4>{member.operative}</h4>
           <p className="battle-member-type">{soldierType}</p>
+          {member.loadout ? <p className="battle-member-note">Loadout: {member.loadout}</p> : null}
           {member.memberNotes ? <p className="battle-member-note">{member.memberNotes}</p> : null}
           {isDead ? (
             <p className="casualty-label">Out of action</p>

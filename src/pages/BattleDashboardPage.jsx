@@ -1,6 +1,7 @@
 import { Fragment, useRef, useState } from "react";
 import ActionsWidget from "../components/battleDashboard/ActionsWidget";
 import ArmyWidget from "../components/battleDashboard/ArmyWidget";
+import FactionRulesWidget from "../components/battleDashboard/FactionRulesWidget";
 import { AddWidgetModal, CardModal, LayoutPresetsModal } from "../components/modals/AppModals";
 import ObjectivesWidget from "../components/battleDashboard/ObjectivesWidget";
 import SummaryWidget from "../components/battleDashboard/SummaryWidget";
@@ -29,6 +30,29 @@ function SizePicker({ size, onChange }) {
           aria-label={`${s} size`}
         >
           {s[0].toUpperCase()}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ArmyLayoutPicker({ layout, onChange }) {
+  return (
+    <div className="army-layout-picker" role="group" aria-label="Army widget layout">
+      {[
+        { key: "a", label: "A", title: "Layout A: current list" },
+        { key: "b", label: "B", title: "Layout B: bottom expandable card" },
+        { key: "c", label: "C", title: "Layout C: larger thumbnails" },
+      ].map((option) => (
+        <button
+          key={option.key}
+          type="button"
+          className={`layout-pill ${layout === option.key ? "active" : ""}`}
+          onClick={() => onChange(option.key)}
+          aria-label={option.title}
+          title={option.title}
+        >
+          {option.label}
         </button>
       ))}
     </div>
@@ -78,6 +102,11 @@ const OBJECTIVES_CATALOG_ENTRY = {
   description: "Track Crit Op, Tac Op, Kill Op and Primary scores for a team."
 };
 
+const FACTION_RULES_CATALOG_ENTRY = {
+  name: "Faction Rules",
+  description: "View the faction rules for a team during battle."
+};
+
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export default function BattleDashboardPage({
@@ -85,6 +114,7 @@ export default function BattleDashboardPage({
   onUpdateTurn,
   onUpdateCounter,
   onUpdateWounds,
+  onUpdateMemberState,
   onResetBattle,
   onEndBattle,
   onGoToOverview,
@@ -94,6 +124,7 @@ export default function BattleDashboardPage({
   const [isEditing, setIsEditing] = useState(false);
   const [showPresets, setShowPresets] = useState(false);
   const [showAddWidget, setShowAddWidget] = useState(false);
+  const [layoutPickerWidgetId, setLayoutPickerWidgetId] = useState(null);
   const [activeCardId, setActiveCardId] = useState(null);
   const [dragIndex, setDragIndex] = useState(null);
   const [overIndex, setOverIndex] = useState(null);
@@ -124,7 +155,8 @@ export default function BattleDashboardPage({
   ];
   const armyWidgets = armies.map((a) => ({ id: `army-${a.id}`, type: "army", armyId: a.id }));
   const objectivesWidgets = armies.map((a) => ({ id: `objectives-${a.id}`, type: "objectives", armyId: a.id }));
-  const allWidgets = [...fixedWidgets, ...armyWidgets, ...objectivesWidgets];
+  const factionRulesWidgets = armies.map((a) => ({ id: `faction-rules-${a.id}`, type: "faction-rules", armyId: a.id }));
+  const allWidgets = [...fixedWidgets, ...armyWidgets, ...objectivesWidgets, ...factionRulesWidgets];
   const allWidgetIds = allWidgets.map((w) => w.id);
   const widgetMetaById = Object.fromEntries(allWidgets.map((w) => [w.id, w]));
 
@@ -142,7 +174,11 @@ export default function BattleDashboardPage({
             }
             return allWidgetIds.includes(entry.id);
           })
-          .map((entry) => (isBreakEntry(entry) ? entry : { id: entry.id, size: entry.size ?? "medium" }))
+          .map((entry) =>
+            isBreakEntry(entry)
+              ? entry
+              : { id: entry.id, size: entry.size ?? "medium", armyLayout: entry.armyLayout }
+          )
       : [];
     const savedIds = saved.filter((entry) => !isBreakEntry(entry)).map((entry) => entry.id);
     const missingFixed = hasSavedLayout
@@ -152,8 +188,20 @@ export default function BattleDashboardPage({
           .map((widget) => ({ id: widget.id, size: "medium" }));
     const missingArmies = armyWidgets
       .filter((widget) => !savedIds.includes(widget.id))
-      .map((widget) => ({ id: widget.id, size: "medium" }));
-    return [...saved, ...missingFixed, ...missingArmies];
+      .map((widget) => ({ id: widget.id, size: "medium", armyLayout: "a" }));
+
+    const normalized = [...saved, ...missingFixed, ...missingArmies].map((entry) => {
+      if (isBreakEntry(entry)) {
+        return entry;
+      }
+      const meta = widgetMetaById[entry.id];
+      if (meta?.type === "army") {
+        return { ...entry, armyLayout: entry.armyLayout ?? "a" };
+      }
+      return entry;
+    });
+
+    return normalized;
   })();
 
   const availableWidgetOptions = fixedWidgets
@@ -174,6 +222,18 @@ export default function BattleDashboardPage({
             description: OBJECTIVES_CATALOG_ENTRY.description
           };
         })
+    )
+    .concat(
+      factionRulesWidgets
+        .filter((widget) => !normalizedLayout.some((entry) => !isBreakEntry(entry) && entry.id === widget.id))
+        .map((widget) => {
+          const army = armies.find((a) => a.id === widget.armyId);
+          return {
+            id: widget.id,
+            name: `${FACTION_RULES_CATALOG_ENTRY.name} — ${army?.armyName ?? widget.armyId}`,
+            description: FACTION_RULES_CATALOG_ENTRY.description
+          };
+        })
     );
 
   // All cards for the modal
@@ -182,8 +242,10 @@ export default function BattleDashboardPage({
       .filter((m) => m.imageDataUrl)
       .map((m) => ({
         id: m.id,
+        armyId: army.id,
         operative: m.operative,
         imageDataUrl: m.imageDataUrl,
+        memberNotes: m.memberNotes || "",
         armyName: army.armyName,
       }))
   );
@@ -227,6 +289,17 @@ export default function BattleDashboardPage({
           return entry;
         }
         return entry.id === id ? { ...entry, size } : entry;
+      })
+    );
+  };
+
+  const handleArmyLayoutChange = (id, armyLayout) => {
+    onUpdateBattleDashboardLayout(
+      normalizedLayout.map((entry) => {
+        if (isBreakEntry(entry)) {
+          return entry;
+        }
+        return entry.id === id ? { ...entry, armyLayout } : entry;
       })
     );
   };
@@ -293,6 +366,7 @@ export default function BattleDashboardPage({
                 setIsEditing(false);
                 setShowAddWidget(false);
                 setShowPresets(false);
+                setLayoutPickerWidgetId(null);
               } : () => setIsEditing(true)}
             >
               {isEditing ? "Done" : "Edit Layout"}
@@ -386,6 +460,27 @@ export default function BattleDashboardPage({
                           size={entry.size}
                           onChange={(s) => handleSizeChange(entry.id, s)}
                         />
+                        {meta.type === "army" ? (
+                          <>
+                            <button
+                              type="button"
+                              className="ghost layout-toggle-btn"
+                              onClick={() =>
+                                setLayoutPickerWidgetId((current) => (current === entry.id ? null : entry.id))
+                              }
+                              aria-label="Change army widget layout"
+                              title="Change army widget layout"
+                            >
+                              ▦
+                            </button>
+                            {layoutPickerWidgetId === entry.id ? (
+                              <ArmyLayoutPicker
+                                layout={entry.armyLayout ?? "a"}
+                                onChange={(layout) => handleArmyLayoutChange(entry.id, layout)}
+                              />
+                            ) : null}
+                          </>
+                        ) : null}
                         {meta.type !== "army" ? (
                           <button
                             type="button"
@@ -426,8 +521,10 @@ export default function BattleDashboardPage({
                         army={army}
                         onUpdateCounter={onUpdateCounter}
                         onUpdateWounds={onUpdateWounds}
+                        onUpdateMemberState={onUpdateMemberState}
                         onOpenCard={(id) => setActiveCardId(id)}
                         size={entry.size}
+                        layoutMode={entry.armyLayout ?? "a"}
                       />
                     );
                   })()}
@@ -439,6 +536,17 @@ export default function BattleDashboardPage({
                       <ObjectivesWidget
                         army={army}
                         onUpdateCounter={onUpdateCounter}
+                        size={entry.size}
+                      />
+                    );
+                  })()}
+
+                  {meta.type === "faction-rules" && (() => {
+                    const army = armies.find((a) => a.id === meta.armyId);
+                    if (!army) return null;
+                    return (
+                      <FactionRulesWidget
+                        army={army}
                         size={entry.size}
                       />
                     );

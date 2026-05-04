@@ -1,14 +1,27 @@
 const OBJECTIVES = [
+  { key: "primary", label: "Primary" },
   { key: "critOps", label: "Crit Op" },
   { key: "tacOps",  label: "Tac Op"  },
   { key: "killOps", label: "Kill Op" },
-  { key: "primary", label: "Primary" },
 ];
 
 export default function ObjectivesWidget({ army, onUpdateCounter, size }) {
   const compact = size === "small";
   const objectiveGridClass = size === "large" ? "large" : "stacked";
   const commandPoints = army.commandPoints ?? 0;
+
+  const applyObjectiveDelta = (field, delta) => {
+    const current = army[field] ?? 0;
+    const next = Math.max(0, Math.min(99, current + delta));
+    const appliedDelta = next - current;
+
+    if (appliedDelta === 0) {
+      return;
+    }
+
+    onUpdateCounter(army.id, field, appliedDelta);
+    onUpdateCounter(army.id, "victoryPoints", appliedDelta);
+  };
 
   return (
     <div className="widget-content bd-objectives-widget">
@@ -52,7 +65,7 @@ export default function ObjectivesWidget({ army, onUpdateCounter, size }) {
                 <button
                   type="button"
                   className="ghost bd-obj-btn"
-                  onClick={() => onUpdateCounter(army.id, key, -1)}
+                  onClick={() => applyObjectiveDelta(key, -1)}
                   disabled={score <= 0}
                   aria-label={`Decrease ${label}`}
                 >
@@ -62,7 +75,7 @@ export default function ObjectivesWidget({ army, onUpdateCounter, size }) {
                 <button
                   type="button"
                   className="bd-obj-btn"
-                  onClick={() => onUpdateCounter(army.id, key, 1)}
+                  onClick={() => applyObjectiveDelta(key, 1)}
                   disabled={score >= 99}
                   aria-label={`Increase ${label}`}
                 >

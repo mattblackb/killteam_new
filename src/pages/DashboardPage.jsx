@@ -191,6 +191,7 @@ export default function DashboardPage({
   onToggleSelection,
   onDeleteArmy,
   onLaunchBattle,
+  onEditArmy,
   battleState,
   dashboardLayout,
   onUpdateDashboardLayout,
@@ -436,15 +437,24 @@ export default function DashboardPage({
                           onToggleSelection={onToggleSelection}
                           size={entry.size}
                         />
-                        {isEditing && (
+                        <div className="widget-army-actions">
                           <button
                             type="button"
-                            className="danger widget-delete-btn"
-                            onClick={() => setPendingDelete(army.id)}
+                            className="ghost widget-edit-army-btn"
+                            onClick={() => onEditArmy(army)}
                           >
-                            Delete Army
+                            Edit Army
                           </button>
-                        )}
+                          {isEditing && (
+                            <button
+                              type="button"
+                              className="danger widget-delete-btn"
+                              onClick={() => setPendingDelete(army.id)}
+                            >
+                              Delete Army
+                            </button>
+                          )}
+                        </div>
                       </>
                     );
                   })()}
