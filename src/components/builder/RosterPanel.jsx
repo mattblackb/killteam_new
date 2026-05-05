@@ -8,6 +8,7 @@ export default function RosterPanel({
   onRemoveMember,
   onSaveArmy,
   onGoToOverview,
+  onDeleteArmy,
 }) {
   return (
     <section className="panel roster-panel">
@@ -31,6 +32,9 @@ export default function RosterPanel({
         </button>
         <button type="button" className="ghost" onClick={onGoToOverview}>
           Go To Overview
+        </button>
+        <button type="button" className="roster-delete-btn" onClick={onDeleteArmy}>
+          Delete Army
         </button>
       </div>
 

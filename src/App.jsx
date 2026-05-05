@@ -493,6 +493,21 @@ export default function App() {
     clearRoster();
   };
 
+  const handleDeleteCurrentArmy = () => {
+    const rosterName = armyName.trim() || "Untitled";
+    const shouldDelete = window.confirm(
+      `Delete the "${rosterName}" roster? This action cannot be undone.`
+    );
+
+    if (!shouldDelete) {
+      return;
+    }
+
+    setArmyId(DEFAULT_ARMY_ID);
+    setEditingArmyId(null);
+    clearRoster();
+  };
+
   const handleSaveArmy = () => {
     setError("");
 
@@ -818,6 +833,7 @@ export default function App() {
           onClearRoster={clearRoster}
           onSaveArmy={handleSaveArmy}
           onGoToOverview={() => setScreen("overview")}
+          onDeleteArmy={handleDeleteCurrentArmy}
           isEditingArmy={!!editingArmyId}
         />
       ) : null}

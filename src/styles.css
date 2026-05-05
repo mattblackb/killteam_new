@@ -258,6 +258,12 @@ button:disabled {
   font-size: 0.85rem;
 }
 
+.roster-delete-btn {
+  margin-left: auto;
+  margin-top: 0;
+  background: linear-gradient(130deg, #cc584e, var(--danger));
+}
+
 .error-text {
   margin: 4px 0 0;
   color: var(--danger);

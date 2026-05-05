@@ -51,6 +51,7 @@ export default function BuilderPage({
   onClearRoster,
   onSaveArmy,
   onGoToOverview,
+  onDeleteArmy,
   isEditingArmy,
 }) {
   const [openSection, setOpenSection] = useState("details");
@@ -123,6 +124,7 @@ export default function BuilderPage({
         onRemoveMember={onRemoveMember}
         onSaveArmy={onSaveArmy}
         onGoToOverview={onGoToOverview}
+        onDeleteArmy={onDeleteArmy}
       />
     </section>
   );
