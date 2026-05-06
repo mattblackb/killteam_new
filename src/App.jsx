@@ -5,8 +5,6 @@ import { clamp, createId, toDataUrl } from "./utils/helpers";
 import { hydrateMembers } from "./utils/operativeUtils";
 import { createBattleArmy, normalizeBattleState } from "./utils/battleUtils";
 import BuilderPage from "./pages/BuilderPage";
-import OverviewPage from "./pages/OverviewPage";
-import BattlePage from "./pages/BattlePage";
 import DashboardPage from "./pages/DashboardPage";
 import BattleDashboardPage from "./pages/BattleDashboardPage";
 
@@ -553,9 +551,9 @@ export default function App() {
         savedAt: new Date().toISOString()
       };
       setSavedArmies((current) => [nextArmy, ...current]);
-      setSaveArmyMessage("Army saved. You can find it in Overview.");
+      setSaveArmyMessage("Army saved. You can find it in Dashboard.");
     }
-    setScreen("overview");
+    setScreen("dashboard");
   };
 
   const handleEditArmy = (army) => {
@@ -619,7 +617,7 @@ export default function App() {
       turnNumber: 1,
       armies: selectedOverviewArmies.map((army) => createBattleArmy(army))
     });
-    setScreen("battle");
+    setScreen("battleboard");
     setError("");
   };
 
@@ -737,7 +735,7 @@ export default function App() {
   };
 
   const endBattle = () => {
-    setScreen("overview");
+    setScreen("dashboard");
   };
 
   // --- Render ---
@@ -761,25 +759,10 @@ export default function App() {
           </button>
           <button
             type="button"
-            className={`tab-button ${screen === "overview" ? "active" : ""}`}
-            onClick={() => setScreen("overview")}
-          >
-            Overview ({savedArmies.length})
-          </button>
-          <button
-            type="button"
-            className={`tab-button ${screen === "battle" ? "active" : ""}`}
-            onClick={() => setScreen("battle")}
-            disabled={!battleState}
-          >
-            Battle
-          </button>
-          <button
-            type="button"
             className={`tab-button ${screen === "dashboard" ? "active" : ""}`}
             onClick={() => setScreen("dashboard")}
           >
-            Dashboard
+            Dashboard ({savedArmies.length})
           </button>
           <button
             type="button"
@@ -832,35 +815,9 @@ export default function App() {
           onRemoveMember={removeMember}
           onClearRoster={clearRoster}
           onSaveArmy={handleSaveArmy}
-          onGoToOverview={() => setScreen("overview")}
+          onGoToOverview={() => setScreen("dashboard")}
           onDeleteArmy={handleDeleteCurrentArmy}
           isEditingArmy={!!editingArmyId}
-        />
-      ) : null}
-
-      {!isLoadingState && screen === "overview" ? (
-        <OverviewPage
-          formattedSavedArmies={formattedSavedArmies}
-          selectedOverviewArmyIds={selectedOverviewArmyIds}
-          selectedOverviewArmies={selectedOverviewArmies}
-          onToggleSelection={toggleOverviewArmySelection}
-          onDeleteArmy={deleteSavedArmy}
-          onStartNewArmy={startNewArmy}
-          onLaunchBattle={launchBattle}
-          hasBuilderData={members.length > 0 || armyName.trim() !== ""}
-        />
-      ) : null}
-
-      {!isLoadingState && screen === "battle" ? (
-        <BattlePage
-          battleState={battleState}
-          onUpdateTurn={updateBattleTurn}
-          onUpdateCounter={updateBattleArmyCounter}
-          onUpdateWounds={updateBattleMemberWounds}
-          onUpdateMemberState={updateBattleMemberState}
-          onResetBattle={resetBattle}
-          onEndBattle={endBattle}
-          onGoToOverview={() => setScreen("overview")}
         />
       ) : null}
 
@@ -887,8 +844,8 @@ export default function App() {
           onUpdateWounds={updateBattleMemberWounds}
           onUpdateMemberState={updateBattleMemberState}
           onResetBattle={resetBattle}
-          onEndBattle={() => setScreen("overview")}
-          onGoToOverview={() => setScreen("overview")}
+          onEndBattle={() => setScreen("dashboard")}
+          onGoToOverview={() => setScreen("dashboard")}
           battleDashboardLayout={battleDashboardLayout}
           onUpdateBattleDashboardLayout={setBattleDashboardLayout}
         />

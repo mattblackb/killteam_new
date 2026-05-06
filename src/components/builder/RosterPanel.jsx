@@ -31,7 +31,7 @@ export default function RosterPanel({
           Save Army
         </button>
         <button type="button" className="ghost" onClick={onGoToOverview}>
-          Go To Overview
+          Go To Dashboard
         </button>
         <button type="button" className="roster-delete-btn" onClick={onDeleteArmy}>
           Delete Army
