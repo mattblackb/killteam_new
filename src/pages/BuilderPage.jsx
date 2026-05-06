@@ -48,8 +48,11 @@ export default function BuilderPage({
   selectedOperative,
   onAddMember,
   onRemoveMember,
+  onUpdateMember,
   onClearRoster,
   onSaveArmy,
+  onExportArmyAsText,
+  onImportArmyFromText,
   onGoToOverview,
   onDeleteArmy,
   isEditingArmy,
@@ -122,7 +125,10 @@ export default function BuilderPage({
         armyNotes={armyNotes}
         selectedArmy={selectedArmy}
         onRemoveMember={onRemoveMember}
+        onUpdateMember={onUpdateMember}
         onSaveArmy={onSaveArmy}
+        onExportArmyAsText={onExportArmyAsText}
+        onImportArmyFromText={onImportArmyFromText}
         onGoToOverview={onGoToOverview}
         onDeleteArmy={onDeleteArmy}
       />

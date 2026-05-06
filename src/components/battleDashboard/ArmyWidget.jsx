@@ -1,15 +1,8 @@
 import { useState } from "react";
 
 const MAIN_STATES = [
-  { key: "ready", label: "Ready", description: "Can be activated this turning point." },
-  { key: "engaged", label: "Engaged", description: "Visible and able to shoot and fight." },
-  { key: "concealed", label: "Concealed", description: "Harder to target and playing stealth." },
-  { key: "guard", label: "Guard", description: "Holding to react to enemy movement." },
-];
-
-const ACTIVATION_STATES = [
-  { key: "not-activated", label: "Not Activated", description: "Has not yet acted this turning point." },
-  { key: "activated", label: "Activated", description: "Already acted this turning point." },
+  { key: "engaged", label: "Engage", description: "Bright red order while active." },
+  { key: "concealed", label: "Conceal", description: "Bright blue order while active." },
 ];
 
 function StateIcon({ stateKey }) {
@@ -35,21 +28,20 @@ function StateIcon({ stateKey }) {
     case "engaged":
       return (
         <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-          <path d="M2.5 8h11" />
-          <path d="M9.5 4.5L13 8l-3.5 3.5" />
+          <circle cx="8" cy="8" r="2.2" fill="none" />
+          <circle cx="8" cy="8" r="4.7" fill="none" />
+          <path d="M8 1.2v2.2" />
+          <path d="M8 12.6v2.2" />
+          <path d="M1.2 8h2.2" />
+          <path d="M12.6 8h2.2" />
         </svg>
       );
     case "concealed":
       return (
         <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-          <path d="M1.5 8c1.7-2.6 3.9-3.8 6.5-3.8S12.8 5.4 14.5 8c-1.7 2.6-3.9 3.8-6.5 3.8S3.2 10.6 1.5 8z" />
-          <circle cx="8" cy="8" r="1.7" />
-        </svg>
-      );
-    case "guard":
-      return (
-        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-          <path d="M8 1.7l4.8 1.8v3.7c0 3-1.7 5.5-4.8 7.1-3.1-1.6-4.8-4.1-4.8-7.1V3.5L8 1.7z" />
+          <path d="M8 1.4c2.1 0 4 .9 5.4 2.4V8c0 3-1.9 5.3-5.4 6.6C4.5 13.3 2.6 11 2.6 8V3.8C4 2.3 5.9 1.4 8 1.4z" fill="none" />
+          <path d="M5.3 8.1h5.4" />
+          <path d="M6.2 10.3h3.6" />
         </svg>
       );
     default:
@@ -72,11 +64,8 @@ function MemberRow({
     member.posture ??
     (member.state === "engaged" || member.state === "engaged-activated"
       ? "engaged"
-      : member.state === "concealed"
-        ? "concealed"
-        : member.state === "guard"
-          ? "guard"
-          : "ready");
+      : "concealed");
+  const selectedPosture = posture === "engaged" ? "engaged" : "concealed";
   const activation =
     member.activation ?? (member.state === "engaged-activated" ? "activated" : "not-activated");
   const hasWounds = typeof member.maxWounds === "number" && member.maxWounds > 0;
@@ -104,6 +93,12 @@ function MemberRow({
     setPreviewSlideIndex(0);
   };
 
+  const toggleActivation = () => {
+    onUpdateMemberState(armyId, member.id, {
+      activation: activation === "activated" ? "not-activated" : "activated",
+    });
+  };
+
   return (
     <li className={`bd-member-row${isDead ? " is-dead" : ""}${compact ? " compact" : ""}${layoutMode === "b" ? " layout-b" : ""}`}>
       <div className="bd-member-row-main">
@@ -119,64 +114,61 @@ function MemberRow({
         ) : null}
         <div className="bd-member-info">
           <span className="bd-member-name">{member.operative}</span>
+          {isDead ? <span className="bd-member-dead-label">Out of action</span> : null}
+          {!isDead && (
+            <div className="bd-member-actions" aria-label="Order and activation controls">
+              <div className="bd-order-group" role="group" aria-label="Order selection">
+                {MAIN_STATES.map(({ key, label, description }) => {
+                  const isActiveOrder = selectedPosture === key;
+                  const isSpent = isActiveOrder && activation === "activated";
+
+                  return (
+                  <button
+                    key={key}
+                    type="button"
+                    className={`bd-order-token order-${key}${isActiveOrder ? " active" : ""}${isSpent ? " is-spent" : ""}`}
+                    onClick={() => onUpdateMemberState(armyId, member.id, { posture: key })}
+                    aria-label={`${label}. ${description}`}
+                    aria-pressed={isActiveOrder}
+                    title={description}
+                  >
+                    <span className="bd-order-icon" aria-hidden="true">
+                      <StateIcon stateKey={key} />
+                    </span>
+                    {!compact ? <span className="bd-order-text">{label}</span> : null}
+                  </button>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                className={`bd-order-flip-btn${activation === "activated" ? " is-spent" : ""}`}
+                onClick={toggleActivation}
+                aria-label={activation === "activated" ? "Set operative to ready" : "Mark operative as APL spent"}
+                title={activation === "activated" ? "Flip to ready side" : "Flip to spent side"}
+              >
+                {activation === "activated" ? "APL Spent" : "Ready"}
+              </button>
+            </div>
+          )}
           {member.loadout ? (
-            <div className="bd-member-loadout-box">
-              <span className="bd-member-loadout-title">Chosen Loadout</span>
-              <span className="bd-member-loadout-value">{member.loadout}</span>
+            <div className="bd-member-loadout-line" title={member.loadout}>
+              <span className="bd-member-loadout-line-label">Loadout:</span>
+              <span className="bd-member-loadout-line-value">{member.loadout}</span>
             </div>
           ) : null}
           {!isDead && isInjured ? (
             <div className="bd-member-status-line">
-              <span className="bd-injured-pill">Injured</span>
+              <span
+                className="bd-injured-pill"
+                data-tooltip="Injured: while below half wounds, this operative's APL is reduced by 1 (minimum 1)."
+                title="Injured: while below half wounds, this operative's APL is reduced by 1 (minimum 1)."
+                aria-label="Injured status. While below half wounds, this operative's APL is reduced by 1, minimum 1."
+              >
+                <span className="bd-injured-icon" aria-hidden="true">&#9888;</span> Injured -1 APL
+              </span>
             </div>
           ) : null}
-          {isDead ? <span className="bd-member-dead-label">Out of action</span> : null}
-          {!isDead && (
-            <div className="bd-member-states">
-              <div className="bd-state-group" aria-label="Main state">
-                {MAIN_STATES.map(({ key, label, description }) => (
-                  <button
-                    key={key}
-                    type="button"
-                    className={`bd-state-pill main-${key}${posture === key ? " active" : ""}`}
-                    onClick={() => onUpdateMemberState(armyId, member.id, { posture: key })}
-                    aria-label={`${label}. ${description}`}
-                    aria-pressed={posture === key}
-                  >
-                    <span className="bd-state-icon" aria-hidden="true">
-                      <StateIcon stateKey={key} />
-                    </span>
-                    {!compact ? <span className="bd-state-text">{label}</span> : null}
-                    <span className="bd-state-tooltip" role="tooltip">
-                      <strong>{label}</strong>
-                      <span>{description}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-              <div className="bd-state-group" aria-label="Activation state">
-                {ACTIVATION_STATES.map(({ key, label, description }) => (
-                  <button
-                    key={key}
-                    type="button"
-                    className={`bd-state-pill activation-${key}${activation === key ? " active" : ""}`}
-                    onClick={() => onUpdateMemberState(armyId, member.id, { activation: key })}
-                    aria-label={`${label}. ${description}`}
-                    aria-pressed={activation === key}
-                  >
-                    <span className="bd-state-icon" aria-hidden="true">
-                      <StateIcon stateKey={key} />
-                    </span>
-                    {!compact ? <span className="bd-state-text">{label}</span> : null}
-                    <span className="bd-state-tooltip" role="tooltip">
-                      <strong>{label}</strong>
-                      <span>{description}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
         <div className="bd-wound-controls" aria-label="Wound tracker">
           <div className="bd-wound-row">
@@ -205,7 +197,8 @@ function MemberRow({
           {!isDead && effectiveApl != null ? (
             <span
               className={`bd-apl-display${isInjured ? " is-injured" : ""}`}
-              title={isInjured ? "APL reduced by 1 while injured" : "Current APL"}
+              title={isInjured ? `Current APL: ${effectiveApl}. Injured operatives reduce APL by 1 (minimum 1).` : `Current APL: ${effectiveApl}.`}
+              aria-label={isInjured ? `Current APL ${effectiveApl}. Injured operatives reduce APL by 1, minimum 1.` : `Current APL ${effectiveApl}.`}
             >
               <span className="bd-apl-display-label">APL</span>
               <span className="bd-apl-display-value">{effectiveApl}</span>

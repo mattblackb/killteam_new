@@ -8,6 +8,10 @@ import BuilderPage from "./pages/BuilderPage";
 import DashboardPage from "./pages/DashboardPage";
 import BattleDashboardPage from "./pages/BattleDashboardPage";
 
+const TXT_EXPORT_HEADER = "KILLTEAM-2026 Army Export v1";
+const TXT_EXPORT_START = "KILLTEAM_ROSTER_JSON_START";
+const TXT_EXPORT_END = "KILLTEAM_ROSTER_JSON_END";
+
 const WRECKA_KREW_LIMITS = {
   "Wrecka Krew Boss Nob": 1,
   "Wrecka Krew Bomb Squig": 2,
@@ -383,14 +387,9 @@ export default function App() {
       }
     }
 
-    if (!cardFile) {
-      setError("Upload a card image for this operative.");
-      return;
-    }
-
     try {
       setSaving(true);
-      const imageDataUrl = await toDataUrl(cardFile);
+      const imageDataUrl = cardFile ? await toDataUrl(cardFile) : null;
       const secondImageDataUrl = cardFile2 ? await toDataUrl(cardFile2) : null;
 
       setMembers((current) => [
@@ -406,7 +405,7 @@ export default function App() {
           loadout: memberLoadout || "",
           memberNotes: memberNotes.trim(),
           imageDataUrl,
-          imageName: cardFile.name,
+          imageName: cardFile?.name || "No image attached",
           ...(secondImageDataUrl ? { secondImageDataUrl } : {}),
           createdAt: new Date().toISOString()
         }
@@ -425,7 +424,7 @@ export default function App() {
         input2.value = "";
       }
     } catch {
-      setError("Could not store the image. Try another file.");
+      setError("Could not process one of the selected images. Try another file.");
     } finally {
       setSaving(false);
     }
@@ -434,6 +433,12 @@ export default function App() {
   const removeMember = (id) => {
     setSaveArmyMessage("");
     setMembers((current) => current.filter((member) => member.id !== id));
+  };
+
+  const updateMember = (id, updates) => {
+    setMembers((current) =>
+      current.map((member) => (member.id === id ? { ...member, ...updates } : member))
+    );
   };
 
   const clearRoster = () => {
@@ -514,7 +519,7 @@ export default function App() {
       return;
     }
     if (members.length === 0) {
-      setError("Add at least one member with a card image before saving.");
+      setError("Add at least one member before saving.");
       return;
     }
 
@@ -554,6 +559,126 @@ export default function App() {
       setSaveArmyMessage("Army saved. You can find it in Dashboard.");
     }
     setScreen("dashboard");
+  };
+
+  const handleExportArmyAsText = () => {
+    setError("");
+    setSaveArmyMessage("");
+
+    if (!armyName.trim()) {
+      setError("Name your army before exporting it.");
+      return;
+    }
+
+    if (members.length === 0) {
+      setError("Add at least one member before exporting.");
+      return;
+    }
+
+    const exportPayload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      roster: {
+        armyId,
+        armyTypeName: selectedArmy.name,
+        faction: selectedArmy.faction,
+        armyName: armyName.trim(),
+        armyNotes: armyNotes.trim(),
+        selectedTacOpIds,
+        members,
+      },
+    };
+
+    const text = [
+      TXT_EXPORT_HEADER,
+      "",
+      TXT_EXPORT_START,
+      JSON.stringify(exportPayload, null, 2),
+      TXT_EXPORT_END,
+      "",
+    ].join("\n");
+
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const safeName = armyName
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "army";
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = `${safeName}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(href);
+    setSaveArmyMessage("Army exported as text file.");
+  };
+
+  const handleImportArmyFromText = async (file) => {
+    setError("");
+    setSaveArmyMessage("");
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      const rawText = await file.text();
+      const trimmed = rawText.trim();
+
+      let parsed = null;
+
+      try {
+        parsed = JSON.parse(trimmed);
+      } catch {
+        const startIndex = rawText.indexOf(TXT_EXPORT_START);
+        const endIndex = rawText.indexOf(TXT_EXPORT_END);
+
+        if (startIndex >= 0 && endIndex > startIndex) {
+          const jsonText = rawText
+            .slice(startIndex + TXT_EXPORT_START.length, endIndex)
+            .trim();
+          parsed = JSON.parse(jsonText);
+        }
+      }
+
+      const roster = parsed?.roster && typeof parsed.roster === "object" ? parsed.roster : parsed;
+
+      if (!roster || typeof roster !== "object") {
+        throw new Error("No roster payload found");
+      }
+
+      const nextArmyId =
+        typeof roster.armyId === "string" && KILL_TEAM_ARMIES.some((army) => army.id === roster.armyId)
+          ? roster.armyId
+          : DEFAULT_ARMY_ID;
+
+      const importedMembers = Array.isArray(roster.members) ? roster.members : [];
+      if (importedMembers.length === 0) {
+        throw new Error("Roster has no members");
+      }
+
+      const normalizedMembers = hydrateMembers(nextArmyId, importedMembers).map((member) => ({
+        ...member,
+        id: typeof member.id === "string" && member.id.trim() ? member.id : createId(),
+      }));
+
+      setArmyId(nextArmyId);
+      setArmyName(typeof roster.armyName === "string" ? roster.armyName : "");
+      setArmyNotes(typeof roster.armyNotes === "string" ? roster.armyNotes : "");
+      setSelectedTacOpIds(Array.isArray(roster.selectedTacOpIds) ? roster.selectedTacOpIds : []);
+      setMembers(normalizedMembers);
+      setEditingArmyId(null);
+      setMemberName("");
+      setMemberNotes("");
+      setMemberLoadout("");
+      setCardFile(null);
+      setCardFile2(null);
+      setSaveArmyMessage("Army imported from text file.");
+    } catch {
+      setError("Could not import this file. Use a valid exported army text file.");
+    }
   };
 
   const handleEditArmy = (army) => {
@@ -813,8 +938,11 @@ export default function App() {
           onToggleTacOp={(id) => setSelectedTacOpIds((current) => current.includes(id) ? current.filter((e) => e !== id) : [...current, id])}
           onAddMember={handleAddMember}
           onRemoveMember={removeMember}
+          onUpdateMember={updateMember}
           onClearRoster={clearRoster}
           onSaveArmy={handleSaveArmy}
+          onExportArmyAsText={handleExportArmyAsText}
+          onImportArmyFromText={handleImportArmyFromText}
           onGoToOverview={() => setScreen("dashboard")}
           onDeleteArmy={handleDeleteCurrentArmy}
           isEditingArmy={!!editingArmyId}

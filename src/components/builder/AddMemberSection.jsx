@@ -165,7 +165,7 @@ export default function AddMemberSection({
         </>
       ) : null}
 
-      <label htmlFor="card-file">Member Card Image</label>
+      <label htmlFor="card-file">Member Card Image <span className="label-optional">(optional)</span></label>
       <input
         id="card-file"
         type="file"

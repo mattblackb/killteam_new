@@ -1,25 +1,30 @@
-import StatChips from "./StatChips";
-import MemberCardShell from "./MemberCardShell";
-import { formatTags } from "../utils/helpers";
-
-export default function ArmyMemberCard({ member, onRemoveMember }) {
+export default function ArmyMemberCard({ member, onRemoveMember, onViewMember, onEditMember }) {
   return (
-    <MemberCardShell>
-      <div className="army-member-images">
-        <img src={member.imageDataUrl} alt={`${member.operative} card`} loading="lazy" />
-        {member.secondImageDataUrl ? (
-          <img src={member.secondImageDataUrl} alt={`${member.operative} back card`} loading="lazy" className="army-member-img-2" />
-        ) : null}
-      </div>
-      <div>
-        <h3>{member.operative}</h3>
-        <StatChips operative={member} />
-        {Array.isArray(member.tags) && member.tags.length > 0 ? (
-          <p className="tag-row">{formatTags(member.tags)}</p>
-        ) : null}
-        {member.loadout ? <p className="member-note-text"><strong>Loadout:</strong> {member.loadout}</p> : null}
-        {member.memberNotes ? <p className="member-note-text">{member.memberNotes}</p> : null}
-        <p>{member.imageName}</p>
+    <li className="army-member-card-compact">
+      {member.imageDataUrl ? (
+        <img
+          src={member.imageDataUrl}
+          alt={`${member.operative} card`}
+          className="army-member-card-compact-thumb"
+          loading="lazy"
+        />
+      ) : null}
+      <span className="army-member-card-compact-name">{member.operative}</span>
+      <div className="army-member-card-compact-actions">
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => onEditMember(member)}
+        >
+          Edit
+        </button>
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => onViewMember(member)}
+        >
+          View
+        </button>
         <button
           type="button"
           className="danger"
@@ -28,6 +33,6 @@ export default function ArmyMemberCard({ member, onRemoveMember }) {
           Remove
         </button>
       </div>
-    </MemberCardShell>
+    </li>
   );
 }

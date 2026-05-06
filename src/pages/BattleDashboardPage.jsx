@@ -4,6 +4,7 @@ import ArmyWidget from "../components/battleDashboard/ArmyWidget";
 import FactionRulesWidget from "../components/battleDashboard/FactionRulesWidget";
 import { AddWidgetModal, CardModal, LayoutPresetsModal } from "../components/modals/AppModals";
 import ObjectivesWidget from "../components/battleDashboard/ObjectivesWidget";
+import ScoreboardWidget from "../components/battleDashboard/ScoreboardWidget";
 import SummaryWidget from "../components/battleDashboard/SummaryWidget";
 import TurnWidget from "../components/battleDashboard/TurnWidget";
 
@@ -28,6 +29,7 @@ function SizePicker({ size, onChange }) {
           className={`size-pill ${size === s ? "active" : ""}`}
           onClick={() => onChange(s)}
           aria-label={`${s} size`}
+          title={`Set widget size to ${s}`}
         >
           {s[0].toUpperCase()}
         </button>
@@ -59,6 +61,60 @@ function ArmyLayoutPicker({ layout, onChange }) {
   );
 }
 
+function ReorderControls({
+  canMoveUp,
+  canMoveDown,
+  onMoveUp,
+  onMoveDown,
+  onMoveTop,
+  onMoveBottom,
+}) {
+  return (
+    <div className="widget-move-controls" role="group" aria-label="Move widget position">
+      <button
+        type="button"
+        className="ghost move-btn"
+        onClick={onMoveUp}
+        disabled={!canMoveUp}
+        aria-label="Move up"
+        title="Move up"
+      >
+        ↑
+      </button>
+      <button
+        type="button"
+        className="ghost move-btn"
+        onClick={onMoveDown}
+        disabled={!canMoveDown}
+        aria-label="Move down"
+        title="Move down"
+      >
+        ↓
+      </button>
+      <button
+        type="button"
+        className="ghost move-btn move-btn-text"
+        onClick={onMoveTop}
+        disabled={!canMoveUp}
+        aria-label="Move to top"
+        title="Move to top"
+      >
+        Top
+      </button>
+      <button
+        type="button"
+        className="ghost move-btn move-btn-text"
+        onClick={onMoveBottom}
+        disabled={!canMoveDown}
+        aria-label="Move to bottom"
+        title="Move to bottom"
+      >
+        Bottom
+      </button>
+    </div>
+  );
+}
+
 // ── Presets config ─────────────────────────────────────────────────────────────
 
 const PRESETS = [
@@ -83,6 +139,10 @@ const PRESETS = [
 ];
 
 const WIDGET_CATALOG = {
+  scoreboard: {
+    name: "Battle Scoreboard",
+    description: "Track turn, CP, VP, and objective scores for each team in one card."
+  },
   turn: {
     name: "Turn Tracker",
     description: "Advance or rewind the battle turn quickly."
@@ -149,6 +209,7 @@ export default function BattleDashboardPage({
   // Build widget definitions
   const armies = battleState.armies ?? [];
   const fixedWidgets = [
+    { id: "scoreboard", type: "scoreboard" },
     { id: "turn", type: "turn" },
     { id: "actions", type: "actions" },
     { id: "summary", type: "summary" },
@@ -160,9 +221,36 @@ export default function BattleDashboardPage({
   const allWidgetIds = allWidgets.map((w) => w.id);
   const widgetMetaById = Object.fromEntries(allWidgets.map((w) => [w.id, w]));
 
+  const buildDefaultLayout = () => {
+    if (armies.length === 2) {
+      return [
+        { id: "scoreboard", size: "large" },
+        { id: `army-${armies[0].id}`, size: "medium", armyLayout: "a" },
+        { id: `army-${armies[1].id}`, size: "medium", armyLayout: "a" },
+        { id: "actions", size: "medium" },
+      ];
+    }
+
+    return [
+      ...fixedWidgets.map((widget) => ({ id: widget.id, size: "medium" })),
+      ...armyWidgets.map((widget) => ({ id: widget.id, size: "medium", armyLayout: "a" })),
+    ];
+  };
+
   // Merge persisted layout
   const normalizedLayout = (() => {
     const hasSavedLayout = Array.isArray(battleDashboardLayout);
+
+    if (!hasSavedLayout) {
+      return buildDefaultLayout().map((entry) => {
+        const meta = widgetMetaById[entry.id];
+        if (meta?.type === "army") {
+          return { ...entry, armyLayout: entry.armyLayout ?? "a" };
+        }
+        return entry;
+      });
+    }
+
     const saved = Array.isArray(battleDashboardLayout)
       ? battleDashboardLayout
           .filter((entry) => {
@@ -282,6 +370,32 @@ export default function BattleDashboardPage({
     dragRef.current = null;
   };
 
+  const moveEntryToIndex = (from, to) => {
+    if (from < 0 || from >= normalizedLayout.length || to < 0 || to >= normalizedLayout.length || from === to) {
+      return;
+    }
+    const next = [...normalizedLayout];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    onUpdateBattleDashboardLayout(next);
+  };
+
+  const moveEntryByOffset = (index, offset) => {
+    const target = index + offset;
+    if (target < 0 || target >= normalizedLayout.length) {
+      return;
+    }
+    moveEntryToIndex(index, target);
+  };
+
+  const moveEntryToBoundary = (index, boundary) => {
+    if (boundary === "top") {
+      moveEntryToIndex(index, 0);
+      return;
+    }
+    moveEntryToIndex(index, normalizedLayout.length - 1);
+  };
+
   const handleSizeChange = (id, size) => {
     onUpdateBattleDashboardLayout(
       normalizedLayout.map((entry) => {
@@ -337,6 +451,13 @@ export default function BattleDashboardPage({
     );
   };
 
+  const resetLayoutToDefault = () => {
+    onUpdateBattleDashboardLayout(buildDefaultLayout());
+    setShowAddWidget(false);
+    setShowPresets(false);
+    setLayoutPickerWidgetId(null);
+  };
+
   return (
     <>
       <section className="battle-panel">
@@ -345,7 +466,12 @@ export default function BattleDashboardPage({
          
           <div className="battle-actions">
             {isEditing && (
-              <button type="button" className="ghost" onClick={() => setShowPresets(true)}>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => setShowPresets(true)}
+                title="Open layout size presets"
+              >
                 Layout Presets
               </button>
             )}
@@ -355,6 +481,7 @@ export default function BattleDashboardPage({
                 className="ghost"
                 onClick={() => setShowAddWidget(true)}
                 disabled={availableWidgetOptions.length === 0}
+                title={availableWidgetOptions.length === 0 ? "No widgets available to add" : "Add another widget to the dashboard"}
               >
                 Add Widget
               </button>
@@ -368,15 +495,24 @@ export default function BattleDashboardPage({
                 setShowPresets(false);
                 setLayoutPickerWidgetId(null);
               } : () => setIsEditing(true)}
+              title={isEditing ? "Finish editing dashboard layout" : "Edit dashboard layout"}
             >
               {isEditing ? "Done" : "Edit Layout"}
+            </button>
+            <button
+              type="button"
+              className="ghost"
+              onClick={resetLayoutToDefault}
+              title="Restore the default widget layout"
+            >
+              Reset to Default
             </button>
           </div>
         </section>
 
         {isEditing && (
           <p className="dashboard-edit-hint" style={{ marginTop: 14 }}>
-            Drag widgets to reorder · Use <strong>S / M / L</strong> to resize
+            Drag or use arrows to reorder · Use <strong>S / M / L</strong> to resize
           </p>
         )}
 
@@ -405,11 +541,20 @@ export default function BattleDashboardPage({
                   >
                     {isEditing ? (
                       <div className="widget-edit-bar">
-                        <span className="widget-drag-handle" aria-hidden="true">⠿</span>
+                        <span className="widget-drag-handle" aria-hidden="true" title="Drag to reorder">⠿</span>
+                        <ReorderControls
+                          canMoveUp={index > 0}
+                          canMoveDown={index < normalizedLayout.length - 1}
+                          onMoveUp={() => moveEntryByOffset(index, -1)}
+                          onMoveDown={() => moveEntryByOffset(index, 1)}
+                          onMoveTop={() => moveEntryToBoundary(index, "top")}
+                          onMoveBottom={() => moveEntryToBoundary(index, "bottom")}
+                        />
                         <button
                           type="button"
                           className="ghost break-remove-btn"
                           onClick={() => removeBreak(entry.id)}
+                          title="Remove this line break"
                         >
                           Remove Break
                         </button>
@@ -424,6 +569,7 @@ export default function BattleDashboardPage({
                       type="button"
                       className="ghost dashboard-insert-break-btn"
                       onClick={() => addBreakAfter(index)}
+                      title="Insert a line break below"
                     >
                       + Add Line Break
                     </button>
@@ -454,8 +600,16 @@ export default function BattleDashboardPage({
                 >
                   {isEditing && (
                     <div className="widget-edit-bar">
-                      <span className="widget-drag-handle" aria-hidden="true">⠿</span>
+                      <span className="widget-drag-handle" aria-hidden="true" title="Drag to reorder">⠿</span>
                       <div className="widget-edit-actions">
+                        <ReorderControls
+                          canMoveUp={index > 0}
+                          canMoveDown={index < normalizedLayout.length - 1}
+                          onMoveUp={() => moveEntryByOffset(index, -1)}
+                          onMoveDown={() => moveEntryByOffset(index, 1)}
+                          onMoveTop={() => moveEntryToBoundary(index, "top")}
+                          onMoveBottom={() => moveEntryToBoundary(index, "bottom")}
+                        />
                         <SizePicker
                           size={entry.size}
                           onChange={(s) => handleSizeChange(entry.id, s)}
@@ -486,6 +640,7 @@ export default function BattleDashboardPage({
                             type="button"
                             className="ghost break-remove-btn"
                             onClick={() => removeWidgetFromLayout(entry.id)}
+                            title="Remove this widget from the layout"
                           >
                             Remove
                           </button>
@@ -498,6 +653,15 @@ export default function BattleDashboardPage({
                     <TurnWidget
                       turnNumber={battleState.turnNumber}
                       onUpdateTurn={onUpdateTurn}
+                      size={entry.size}
+                    />
+                  )}
+
+                  {meta.type === "scoreboard" && (
+                    <ScoreboardWidget
+                      battleState={battleState}
+                      onUpdateTurn={onUpdateTurn}
+                      onUpdateCounter={onUpdateCounter}
                       size={entry.size}
                     />
                   )}
@@ -557,6 +721,7 @@ export default function BattleDashboardPage({
                     type="button"
                     className="ghost dashboard-insert-break-btn"
                     onClick={() => addBreakAfter(index)}
+                    title="Insert a line break below"
                   >
                     + Add Line Break
                   </button>
