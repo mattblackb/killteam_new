@@ -118,6 +118,70 @@ h1 {
   margin-top: 24px;
 }
 
+.account-grid {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.account-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.account-code-row {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.account-join-row {
+  display: flex;
+  gap: 8px;
+}
+
+.account-join-row input {
+  flex: 1 1 auto;
+}
+
+.account-session-card {
+  margin-top: 8px;
+  border: 1px solid rgba(15, 34, 32, 0.14);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.5);
+  display: grid;
+  gap: 6px;
+}
+
+.account-subtitle {
+  margin-top: 10px;
+  font-size: 1rem;
+}
+
+.account-session-army-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.account-session-army-item {
+  border: 1px solid rgba(15, 34, 32, 0.14);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.55);
+  padding: 8px 10px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
 form.panel {
   display: grid;
   gap: 10px;
@@ -1723,6 +1787,9 @@ button:disabled {
   .bd-scoreboard-widget.spacious .bd-scoreboard-list.grid,
   .bd-scoreboard-widget.spacious.size-large .bd-scoreboard-list.grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .account-grid {
+    grid-template-columns: 1fr;
   }
 }
 

@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_ARMY_ID, KILL_TEAM_ARMIES } from "./data/killTeams";
-import { loadAppState, saveBattleState, saveDraftRoster, saveSavedArmies, saveDashboardLayout, saveBattleDashboardLayout } from "./lib/storage";
+import { loadAppState, saveAccountProfile, saveBattleState, saveDraftRoster, saveGameSession, saveSavedArmies, saveDashboardLayout, saveBattleDashboardLayout } from "./lib/storage";
 import { clamp, createId, toDataUrl } from "./utils/helpers";
 import { hydrateMembers } from "./utils/operativeUtils";
 import { createBattleArmy, normalizeBattleState } from "./utils/battleUtils";
 import BuilderPage from "./pages/BuilderPage";
 import DashboardPage from "./pages/DashboardPage";
 import BattleDashboardPage from "./pages/BattleDashboardPage";
+import AccountPage from "./pages/AccountPage";
+import { ensureSession, fetchSessionArmies, fetchSessionBattleState, publishArmyToSession, publishSessionBattleState, subscribeToSessionArmies, subscribeToSessionBattleState, supabaseConfigured, verifySession } from "./lib/supabaseSync";
 
 const TXT_EXPORT_HEADER = "KILLTEAM-2026 Army Export v1";
 const TXT_EXPORT_START = "KILLTEAM_ROSTER_JSON_START";
@@ -80,6 +82,10 @@ export default function App() {
   const [battleState, setBattleState] = useState(null);
   const [dashboardLayout, setDashboardLayout] = useState(null);
   const [battleDashboardLayout, setBattleDashboardLayout] = useState(null);
+  const [accountProfile, setAccountProfile] = useState(null);
+  const [gameSession, setGameSession] = useState(null);
+  const [sessionArmies, setSessionArmies] = useState([]);
+  const [syncMessage, setSyncMessage] = useState("");
   const hasHydratedRef = useRef(false);
 
   const selectedArmy = useMemo(
@@ -268,6 +274,8 @@ export default function App() {
         setBattleState(normalizeBattleState(appState.battleState));
         setDashboardLayout(Array.isArray(appState.dashboardLayout) ? appState.dashboardLayout : null);
         setBattleDashboardLayout(Array.isArray(appState.battleDashboardLayout) ? appState.battleDashboardLayout : null);
+        setAccountProfile(appState.accountProfile && typeof appState.accountProfile === "object" ? appState.accountProfile : null);
+        setGameSession(appState.gameSession && typeof appState.gameSession === "object" ? appState.gameSession : null);
       } catch {
         if (isMounted) {
           setStorageError("Persistent storage could not be opened. Your roster will only last for this session.");
@@ -348,6 +356,117 @@ export default function App() {
     }
     saveBattleDashboardLayout(battleDashboardLayout).catch(() => {});
   }, [battleDashboardLayout]);
+
+  useEffect(() => {
+    if (!hasHydratedRef.current) {
+      return;
+    }
+    saveAccountProfile(accountProfile).catch(() => {
+      setStorageError("Account profile could not be saved locally.");
+    });
+  }, [accountProfile]);
+
+  useEffect(() => {
+    if (!hasHydratedRef.current) {
+      return;
+    }
+    saveGameSession(gameSession).catch(() => {
+      setStorageError("Game session could not be saved locally.");
+    });
+  }, [gameSession]);
+
+  const refreshSessionArmies = async (sessionCode = gameSession?.code) => {
+    if (!sessionCode || !supabaseConfigured()) {
+      setSessionArmies([]);
+      return;
+    }
+
+    try {
+      const rows = await fetchSessionArmies(sessionCode);
+      setSessionArmies(rows);
+    } catch (err) {
+      setSyncMessage(err?.message || "Could not refresh session armies.");
+    }
+  };
+
+  useEffect(() => {
+    if (!gameSession?.code || !supabaseConfigured()) {
+      setSessionArmies([]);
+      return;
+    }
+
+    let unsub = null;
+
+    refreshSessionArmies(gameSession.code);
+
+    try {
+      unsub = subscribeToSessionArmies(gameSession.code, () => {
+        refreshSessionArmies(gameSession.code);
+      });
+    } catch (err) {
+      setSyncMessage(err?.message || "Realtime subscription could not start.");
+    }
+
+    return () => {
+      if (typeof unsub === "function") {
+        unsub();
+      }
+    };
+  }, [gameSession?.code]);
+
+  const refreshRemoteBattleState = async (sessionCode = gameSession?.code) => {
+    if (!sessionCode || !supabaseConfigured()) {
+      return;
+    }
+    try {
+      const row = await fetchSessionBattleState(sessionCode);
+      if (row?.battle_state) {
+        setBattleState(normalizeBattleState(row.battle_state));
+      }
+    } catch (err) {
+      setSyncMessage(err?.message || "Could not refresh shared battle state.");
+    }
+  };
+
+  useEffect(() => {
+    if (!gameSession?.code || !supabaseConfigured()) {
+      return;
+    }
+
+    let unsub = null;
+
+    refreshRemoteBattleState(gameSession.code);
+
+    try {
+      unsub = subscribeToSessionBattleState(gameSession.code, () => {
+        if (gameSession.role !== "host") {
+          refreshRemoteBattleState(gameSession.code);
+        }
+      });
+    } catch (err) {
+      setSyncMessage(err?.message || "Battle realtime subscription could not start.");
+    }
+
+    return () => {
+      if (typeof unsub === "function") {
+        unsub();
+      }
+    };
+  }, [gameSession?.code, gameSession?.role]);
+
+  useEffect(() => {
+    if (!supabaseConfigured() || !gameSession?.code || gameSession.role !== "host" || !battleState) {
+      return;
+    }
+
+    publishSessionBattleState({
+      sessionCode: gameSession.code,
+      battleState,
+      updatedBy: accountProfile?.userCode || "host",
+    }).catch((err) => {
+      setSyncMessage(err?.message || "Could not push battle state to session.");
+    });
+  }, [battleState, gameSession?.code, gameSession?.role, accountProfile?.userCode]);
 
   // --- Builder handlers ---
 
@@ -721,6 +840,32 @@ export default function App() {
     [savedArmies, selectedOverviewArmyIds]
   );
 
+  const publishableArmies = useMemo(() => {
+    const fromSaved = savedArmies.map((army) => ({
+      ...army,
+      source: "saved",
+    }));
+
+    if (armyName.trim() && members.length > 0) {
+      return [
+        {
+          id: "__draft__",
+          armyId,
+          armyTypeName: selectedArmy.name,
+          faction: selectedArmy.faction,
+          armyName: `${armyName.trim()} (Draft)`,
+          armyNotes: armyNotes.trim(),
+          selectedTacOpIds,
+          members,
+          source: "draft",
+        },
+        ...fromSaved,
+      ];
+    }
+
+    return fromSaved;
+  }, [savedArmies, armyName, members, armyId, selectedArmy, armyNotes, selectedTacOpIds]);
+
   const toggleOverviewArmySelection = (id) => {
     setSelectedOverviewArmyIds((current) => {
       if (current.includes(id)) {
@@ -863,6 +1008,134 @@ export default function App() {
     setScreen("dashboard");
   };
 
+  // --- Account + session handlers ---
+
+  const handleCreateSession = async (session) => {
+    setSyncMessage("");
+    if (!accountProfile?.userCode) {
+      setSyncMessage("Create an account first so your user code can own the session.");
+      return;
+    }
+
+    try {
+      if (supabaseConfigured()) {
+        await ensureSession({ code: session.code, hostCode: accountProfile.userCode });
+      }
+
+      setGameSession({ ...session, status: "waiting" });
+      setSyncMessage(supabaseConfigured() ? "Session created and synced." : "Session created locally. Configure Supabase for sharing.");
+    } catch (err) {
+      setSyncMessage(err?.message || "Could not create session.");
+    }
+  };
+
+  const handleJoinSession = async (session) => {
+    setSyncMessage("");
+    if (!accountProfile?.userCode) {
+      setSyncMessage("Create an account first so your user code can join sessions.");
+      return;
+    }
+
+    try {
+      if (supabaseConfigured()) {
+        const exists = await verifySession(session.code);
+        if (!exists) {
+          setSyncMessage("Session code not found.");
+          return;
+        }
+      }
+
+      setGameSession({ ...session, status: "connected" });
+      setSyncMessage(supabaseConfigured() ? "Joined session." : "Joined locally. Configure Supabase for sharing.");
+    } catch (err) {
+      setSyncMessage(err?.message || "Could not join session.");
+    }
+  };
+
+  const handleClearSession = () => {
+    setGameSession(null);
+    setSessionArmies([]);
+    setSyncMessage("");
+  };
+
+  const handlePublishArmyToSession = async (publishArmyId) => {
+    setSyncMessage("");
+
+    if (!gameSession?.code) {
+      setSyncMessage("Create or join a session first.");
+      return;
+    }
+    if (!accountProfile?.userCode) {
+      setSyncMessage("Create an account first.");
+      return;
+    }
+    if (!supabaseConfigured()) {
+      setSyncMessage("Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+      return;
+    }
+
+    const army = publishableArmies.find((a) => a.id === publishArmyId);
+    if (!army) {
+      setSyncMessage("Selected army could not be found.");
+      return;
+    }
+
+    try {
+      await publishArmyToSession({
+        sessionCode: gameSession.code,
+        ownerCode: accountProfile.userCode,
+        ownerName: accountProfile.displayName,
+        army: {
+          armyId: army.armyId,
+          armyTypeName: army.armyTypeName,
+          faction: army.faction,
+          armyName: army.armyName,
+          armyNotes: army.armyNotes || "",
+          selectedTacOpIds: army.selectedTacOpIds || [],
+          members: army.members || [],
+        },
+      });
+
+      setSyncMessage("Army published to session.");
+      refreshSessionArmies(gameSession.code);
+    } catch (err) {
+      setSyncMessage(err?.message || "Could not publish army.");
+    }
+  };
+
+  const handleImportSessionArmy = (row) => {
+    const sharedArmy = row?.army_payload;
+    if (!sharedArmy || !Array.isArray(sharedArmy.members)) {
+      setSyncMessage("This shared army is invalid.");
+      return;
+    }
+
+    const imported = {
+      id: `remote-${row.session_code}-${row.owner_code}`,
+      armyId: sharedArmy.armyId,
+      armyTypeName: sharedArmy.armyTypeName,
+      faction: sharedArmy.faction,
+      armyName: `${sharedArmy.armyName} [${row.owner_name || row.owner_code}]`,
+      armyNotes: sharedArmy.armyNotes || "",
+      selectedTacOpIds: Array.isArray(sharedArmy.selectedTacOpIds) ? sharedArmy.selectedTacOpIds : [],
+      members: hydrateMembers(sharedArmy.armyId, sharedArmy.members),
+      savedAt: new Date().toISOString(),
+    };
+
+    setSavedArmies((current) => {
+      const existingIndex = current.findIndex((a) => a.id === imported.id);
+      if (existingIndex === -1) {
+        return [imported, ...current];
+      }
+      const next = [...current];
+      next[existingIndex] = imported;
+      return next;
+    });
+
+    setSyncMessage("Shared army imported to Dashboard.");
+    setScreen("dashboard");
+  };
+
   // --- Render ---
 
   return (
@@ -896,6 +1169,13 @@ export default function App() {
             disabled={!battleState}
           >
             Battle Board
+          </button>
+          <button
+            type="button"
+            className={`tab-button ${screen === "account" ? "active" : ""}`}
+            onClick={() => setScreen("account")}
+          >
+            Account
           </button>
         </div>
       </section>
@@ -976,6 +1256,24 @@ export default function App() {
           onGoToOverview={() => setScreen("dashboard")}
           battleDashboardLayout={battleDashboardLayout}
           onUpdateBattleDashboardLayout={setBattleDashboardLayout}
+        />
+      ) : null}
+
+      {!isLoadingState && screen === "account" ? (
+        <AccountPage
+          accountProfile={accountProfile}
+          gameSession={gameSession}
+          publishableArmies={publishableArmies}
+          sessionArmies={sessionArmies}
+          supabaseReady={supabaseConfigured()}
+          syncMessage={syncMessage}
+          onSaveAccount={setAccountProfile}
+          onCreateSession={handleCreateSession}
+          onJoinSession={handleJoinSession}
+          onClearSession={handleClearSession}
+          onPublishArmy={handlePublishArmyToSession}
+          onRefreshSessionArmies={() => refreshSessionArmies()}
+          onImportSessionArmy={handleImportSessionArmy}
         />
       ) : null}
     </main>

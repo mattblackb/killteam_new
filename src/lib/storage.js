@@ -85,12 +85,14 @@ function clearLegacyStorage() {
 
 export async function loadAppState() {
   const database = await openDatabase();
-  const [draft, savedArmies, battleState, dashboardLayout, battleDashboardLayout] = await Promise.all([
+  const [draft, savedArmies, battleState, dashboardLayout, battleDashboardLayout, accountProfile, gameSession] = await Promise.all([
     readKey(database, "draftRoster"),
     readKey(database, "savedArmies"),
     readKey(database, "battleState"),
     readKey(database, "dashboardLayout"),
-    readKey(database, "battleDashboardLayout")
+    readKey(database, "battleDashboardLayout"),
+    readKey(database, "accountProfile"),
+    readKey(database, "gameSession")
   ]);
 
   if (draft || savedArmies || battleState) {
@@ -99,7 +101,9 @@ export async function loadAppState() {
       savedArmies: Array.isArray(savedArmies) ? savedArmies : [],
       battleState: battleState && typeof battleState === "object" ? battleState : null,
       dashboardLayout: Array.isArray(dashboardLayout) ? dashboardLayout : null,
-      battleDashboardLayout: Array.isArray(battleDashboardLayout) ? battleDashboardLayout : null
+      battleDashboardLayout: Array.isArray(battleDashboardLayout) ? battleDashboardLayout : null,
+      accountProfile: accountProfile && typeof accountProfile === "object" ? accountProfile : null,
+      gameSession: gameSession && typeof gameSession === "object" ? gameSession : null
     };
   }
 
@@ -119,7 +123,9 @@ export async function loadAppState() {
     savedArmies: legacySavedArmies,
     battleState: null,
     dashboardLayout: null,
-    battleDashboardLayout: null
+    battleDashboardLayout: null,
+    accountProfile: null,
+    gameSession: null
   };
 }
 
@@ -146,4 +152,14 @@ export async function saveDashboardLayout(dashboardLayout) {
 export async function saveBattleDashboardLayout(battleDashboardLayout) {
   const database = await openDatabase();
   await writeKey(database, "battleDashboardLayout", battleDashboardLayout);
+}
+
+export async function saveAccountProfile(accountProfile) {
+  const database = await openDatabase();
+  await writeKey(database, "accountProfile", accountProfile);
+}
+
+export async function saveGameSession(gameSession) {
+  const database = await openDatabase();
+  await writeKey(database, "gameSession", gameSession);
 }
